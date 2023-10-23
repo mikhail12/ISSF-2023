@@ -6,12 +6,28 @@ use winit::{
     window::Window,
 };
 
+use array_macro::array;
+
 use std::{borrow::Cow, iter, num::{NonZeroU64, NonZeroU32}, array, any::TypeId};
 
 pub async fn run(event_loop: EventLoop<()>, window: Window) {
+    // input is a horizontal matrix [1,3,7,19,18.2874]
+    let input = [[1 as f32,3 as f32,7 as f32, 19 as f32, 18.2874]];
+
+    // second arr is a vertical matrix  [1.345  ]
+    //                                  [2.2    ]
+    //                                  [74     ]
+    //                                  [20     ]
+    //                                  [18.2874]
+    let secondArr = [[1.345],[2.2] ,[74 as f32], [20 as f32], [18.2874]];
+
     
-    let input = [1 as f32,3 as f32,7 as f32, 19 as f32, 18.2874];
-    let mut res = input.clone();
+
+    let mut resVec = vec![vec![0.0 as f32;input.len()];secondArr[0].len()];
+
+
+    // Should be [rowCountA, colCountB]
+    let dimensions: [u32; 2] = [input.len() as u32,secondArr[0].len() as u32];
     
     let instance = wgpu::Instance::new(wgpu::InstanceDescriptor{ backends: wgpu::Backends::PRIMARY, dx12_shader_compiler: wgpu::Dx12Compiler::Fxc});
     let surface = unsafe { instance.create_surface(&window)}.unwrap();
@@ -42,7 +58,7 @@ pub async fn run(event_loop: EventLoop<()>, window: Window) {
         label: Some("doubling compute pipeline"),
         layout: None,
         module: &shader,
-        entry_point: "computeSomething"
+        entry_point: "matrixMult"
     };
 
     let pipeline = device.create_compute_pipeline( &pipelineDescriptor);
@@ -64,9 +80,21 @@ pub async fn run(event_loop: EventLoop<()>, window: Window) {
         usage: BufferUsages::STORAGE | BufferUsages::COPY_SRC | BufferUsages::COPY_DST
     });
 
+    let secondBuffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+        label: Some("Second Buffer"),
+        contents: bytemuck::cast_slice(&secondArr),
+        usage: BufferUsages::STORAGE | BufferUsages::COPY_SRC | BufferUsages::COPY_DST
+    });
+
+    let dimensionBuffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+        label: Some("Dimension Buffer"),
+        contents: bytemuck::cast_slice(&dimensions),
+        usage: BufferUsages::UNIFORM
+    });
+
     let resultBufferDescriptor = wgpu::BufferDescriptor {
         label: Some("Result Buffer"),
-        size: bytemuck::bytes_of(&input).len() as u64,
+        size: bytemuck::bytes_of(&res).len() as u64,
         usage: BufferUsages::MAP_READ | BufferUsages::COPY_DST,
         mapped_at_creation: false
     };
@@ -80,7 +108,9 @@ pub async fn run(event_loop: EventLoop<()>, window: Window) {
         label: Some("Bindgroup for work buffer"),
         layout: &bindGroupLayout,
         entries: & [
-            BindGroupEntry {binding: 0, resource: workBuffer.as_entire_binding()}
+            BindGroupEntry {binding: 0, resource: workBuffer.as_entire_binding()},
+            BindGroupEntry {binding: 1, resource: secondBuffer.as_entire_binding()},
+            BindGroupEntry {binding: 2, resource: dimensionBuffer.as_entire_binding()}
         ]
     };
 
@@ -101,7 +131,7 @@ pub async fn run(event_loop: EventLoop<()>, window: Window) {
 
         pass.set_pipeline(&pipeline);
         pass.set_bind_group(0, &bindGroup, &[]);
-        pass.dispatch_workgroups(input.len() as u32, 3, 3);
+        pass.dispatch_workgroups(input[0].len() as u32, secondArr.len() as u32, 3);
     }
 
     encoder.copy_buffer_to_buffer(&workBuffer, 0, &resultBuffer, 0, resultBuffer.size());
@@ -135,19 +165,19 @@ pub async fn run(event_loop: EventLoop<()>, window: Window) {
     // wait for the GPU to finish
     device.poll(wgpu::Maintain::Wait);
 
-    match rx.receive().await {
-        Some(Ok(())) => {
-            let data = slice.get_mapped_range();
-            res = data.chunks_exact(4).map(|b| f32::from_ne_bytes(b.try_into().unwrap())).collect::<Vec<f32>>()
-            .as_slice()
-            .try_into()
-            .unwrap();
-            print!("{:?}",res);
-            drop(data);
-            resultBuffer.unmap();
-        }
-        _ => eprintln!("Something went wrong"),
-    }
+    //match rx.receive().await {
+    //    Some(Ok(())) => {
+    //        let data = slice.get_mapped_range();
+    //        res = data.chunks_exact(4).map(|b| f32::from_ne_bytes(b.try_into().unwrap())).collect::<Vec<f32>>()
+    //        .as_slice()
+    //        .try_into()
+    //        .unwrap();
+    //        print!("{:?}",res);
+    //        drop(data);
+    //        resultBuffer.unmap();
+    //    }
+    //    _ => eprintln!("Something went wrong"),
+    //}
         
     
 
@@ -159,4 +189,12 @@ fn main() {
     window.set_title("Tringle");
     env_logger::init();
     pollster::block_on( run(event_loop,window));
+}
+
+fn getBytesVectorVector(vec: Vec<Vec<f32>>) -> [u8] {
+    let mut res = [];
+    for i in vec {
+        for j in i {
+        }
+    }
 }
