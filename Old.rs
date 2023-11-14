@@ -132,8 +132,29 @@ pub async fn run(event_loop: EventLoop<()>, window: Window) {
     let result: [f32;3] = bytemuck::from_bytes::<[f32;3]>(slice.as_bytes()).clone();
     print!("{:?}",result);
     
-    resultBuffer.unmap()
+    resultBuffer.unmap();
 
+    let (tx, rx) = futures_intrusive::channel::shared::oneshot_channel();
+    let slice = resultBuffer.slice(..);
+    slice.map_async(wgpu::MapMode::Read, move |result| {
+        tx.send(result).unwrap();
+    });
+    // wait for the GPU to finish
+    device.poll(wgpu::Maintain::Wait);
+
+    //match rx.receive().await {
+    //    Some(Ok(())) => {
+    //        let data = slice.get_mapped_range();
+    //        res = data.chunks_exact(4).map(|b| f32::from_ne_bytes(b.try_into().unwrap())).collect::<Vec<f32>>()
+    //        .as_slice()
+    //        .try_into()
+    //        .unwrap();
+    //        print!("{:?}",res);
+    //        drop(data);
+    //        resultBuffer.unmap();
+    //    }
+    //    _ => eprintln!("Something went wrong"),
+    //}
 }
 
 fn main() {
