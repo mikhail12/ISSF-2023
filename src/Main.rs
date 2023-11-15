@@ -19,6 +19,8 @@ use lib::{person::Personstate, wgpuInit::{self, WgpuInit}};
 
 pub mod lib;
 
+use std::sync::{Arc, Mutex};
+
 //pub async fn run(event_loop: EventLoop<()>, window: Window) {
     // input is a horizontal matrix [1,3,7,19,18.2874]
 //    let input = [[1 as f32,3 as f32,7 as f32, 19 as f32, 18.2874]];
@@ -231,38 +233,56 @@ async fn main() {
 
     let days = 100;
 
-    let mut simulation = SIRModel::new(60000, 1.4,7,5,1.0,0.05,1000.0,1000.0,10.0,100.0,days, wgpuinit);
-    simulation.runSim().await;
+    let mut simulation = SIRModel::new(100, 1.4,7,5,1.0,0.05,1000.0,1000.0,10.0,100.0,days, wgpuinit,Vec::new());
+
+    let mutdat = Arc::new(Mutex::new(simulation));
+    let thdat1 = Arc::clone(&mutdat);
+    let thdat2 = Arc::clone(&mutdat);
 
     let mut t: usize = 0;
-    let mut simulated = false;
-    let mut sim = false;
 
-     
-    event_loop.run(move |event, control_flow| match event {
-        Event::WindowEvent {
-            ref event,
-            window_id,
-        } if window_id == window.id() => {
+    let mut runsim = async {
+        let mut simul = thdat1.lock().unwrap();
+        println!("this is running");
+        runsimulation(&mut *simul).await;
+    };
+
+    let mut eventloopfuture = async {
+        let mut simul = thdat2.lock().unwrap();
+        event_loop.run(move |event, control_flow| {
+            control_flow.set_control_flow(ControlFlow::Poll);
+            
             match event {
-                WindowEvent::CloseRequested => control_flow.exit(),
-                winit::event::WindowEvent::RedrawRequested => {
-                    if simulated {
-                        simulation.newFrame(t);
-                        if t <days {
-                            t = t+1
-                        } else {
-                            t = 0;
-                        }
-                    } 
+                Event::WindowEvent {
+                    ref event,
+                    window_id,
+                } if window_id == window.id() => {
+                    match event {
+                        WindowEvent::CloseRequested => control_flow.exit(),
+                        winit::event::WindowEvent::RedrawRequested => {
+
+                            simul.newFrame(t);
+                            println!("This ran as well");
+                            if t <days {
+                                t = t+1
+                            } else {
+                                t = 0;
+                            } 
+                            
+                        },
+                        _ => {}
+                    }
                     
                 },
                 _ => {}
             }
-            
-        },
-        _ => {}
-    });
+        });
+    };
+
+    runsim.await;
+    eventloopfuture.await;
+    
+    //futures::future::join(runsim,eventloopfuture);
     
     
     /*
@@ -276,6 +296,8 @@ async fn main() {
         }
     });
     */
+
+    //totalfuture.await;
 }
 /* 
 async fn handle_event(event: Event<()>, control_flow: &mut ControlFlow) {
@@ -309,3 +331,8 @@ async fn handle_event(event: Event<()>, control_flow: &mut ControlFlow) {
     }
 }
 */
+
+async fn  runsimulation(simul: &mut SIRModel) {
+    println!("This ever run?");
+    simul.runSim().await;
+}

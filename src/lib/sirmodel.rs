@@ -1,7 +1,10 @@
 
 
 
+use tokio::task::block_in_place;
+
 use super::{matrix::Matrix, person::{Person, Personstate}, wgpuInit::WgpuInit};
+
 
 
 pub struct SIRModel {
@@ -14,10 +17,50 @@ pub struct SIRModel {
     infRad: f32,
     infectiousPeriod: usize,
     daysRun: usize,
-    wgpuinit: WgpuInit
+    wgpuinit: WgpuInit,
+    simulated: bool,
+    spreadRan: f64,
+    interventions: Vec<Intervention>
 }
 
+//spreadran is actually the spread rate
+
 impl SIRModel {
+
+    pub fn setSpread(&mut self, spreadRate: f64) {
+        self.spreadMinMax = Matrix::from(vec![vec![spreadRate-(self.spreadRan/2.0),spreadRate+(self.spreadRan/2.0)]]);
+        
+    }
+
+    pub fn clearOut(&mut self) {
+        let mut res = SIRModel::emptyTZero(self.popsize, self.daysRun, self.wgpuinit);
+        for i in 0..(self.popsize-self.getNumInfected(0)) {
+            res.population[0].push(Person::random(Personstate::Sus,self.spreadMinMax.clone(), self.spawnLoc.clone(), self.velocityMinMax.clone()));
+        }
+        for i in 0..self.getNumInfected(0) {
+            res.population[0].push(Person::random(Personstate::Inf,self.spreadMinMax.clone(), self.spawnLoc.clone(), self.velocityMinMax.clone()));
+    
+        }
+
+        for i in 0..self.popsize {
+            res.populationposvel[0][0].push(res.population[0][i].getPosVel()[0]);
+            res.populationposvel[0][1].push(res.population[0][i].getPosVel()[1]);
+            res.populationposvel[0][2].push(res.population[0][i].getPosVel()[2]);
+            res.populationposvel[0][3].push(res.population[0][i].getPosVel()[3]);
+            res.populationinf[0].push(boolToU32(res.population[0][i].infectCheck()))
+        }
+
+        res.popsize = popsize;
+        res.spreadMinMax = self.spreadMinMax;
+        res.spreadRan = self.spreadRan;
+        println!("x: {:?}, y: {:?}",self.spawnLoc.clone().data[0][0],self.spawnLoc.clone().data[0][1]);
+        res.spawnLoc = self.spawnLoc;
+        res.infRad = self.infRad;
+        res.infectiousPeriod = self.infectiousPeriod;
+        res.interventions = self.interventions;
+        self = &mut res;
+    }
+
     pub fn emptyTZero(popsize: usize, days: usize, wgpuinit: WgpuInit)-> SIRModel {
         SIRModel {
             population: vec![Vec::new();days],
@@ -29,11 +72,14 @@ impl SIRModel {
             infRad:0.0,
             infectiousPeriod:7,
             daysRun: days,
-            wgpuinit: wgpuinit
+            wgpuinit: wgpuinit,
+            simulated: false,
+            spreadRan: 0.0,
+            interventions: Vec::new()
         }
     }
 
-    pub fn new(popsize: usize, infRad:f32, infectiousPeriod:usize, startInfNum:usize, spreadRate: f64, spreadRan: f64, spawn_x: f64, spawn_y: f64, minVelocity: f64, maxVelocity: f64, daysRun: usize, wgpuinit: WgpuInit) -> SIRModel {
+    pub fn new(popsize: usize, infRad:f32, infectiousPeriod:usize, startInfNum:usize, spreadRate: f64, spreadRan: f64, spawn_x: f64, spawn_y: f64, minVelocity: f64, maxVelocity: f64, daysRun: usize, wgpuinit: WgpuInit, interventions: Vec<Intervention>) -> SIRModel {
         let mut spawnLoc = Matrix::from(vec![vec![spawn_x*0.5,spawn_y*0.5]]);
         let mut spreadMinMax = Matrix::from(vec![vec![spreadRate-(spreadRan/2.0),spreadRate+(spreadRan/2.0)]]);
         let mut velocityMinMax = Matrix::from(vec![vec![minVelocity,maxVelocity]]);
@@ -56,17 +102,34 @@ impl SIRModel {
 
         res.popsize = popsize;
         res.spreadMinMax = spreadMinMax;
+        res.spreadRan = spreadRate;
         println!("x: {:?}, y: {:?}",spawnLoc.clone().data[0][0],spawnLoc.clone().data[0][1]);
         res.spawnLoc = spawnLoc;
         res.infRad = infRad;
         res.infectiousPeriod = infectiousPeriod;
+        res.interventions = interventions;
         res
     }
 
-    pub async fn runSim(mut self) {
+    pub async fn runSim(&mut self) {
+        println!("This code actually executed");
         for i in 0..self.daysRun {
             self.timestep(i).await
         }
+        println!("This finished");
+        self.simulated = true;
+    }
+
+    pub fn numInfected(&mut self) -> Vec<usize> {
+        let c = vec![0];
+        for i in 0..self.daysRun {
+            for j in 0..self.populationinf[i].len() {
+                if self.populationinf[i][j] {
+                    c[i] = c[i] + 1;
+                }
+            }
+        }
+        c
     }
 
     
@@ -130,15 +193,65 @@ impl SIRModel {
     
 
     pub async fn timestep(&mut self, time: usize) {
+        let mut rng = rand::thread_rng();
         if time > 0 {
+            for int in self.interventions {
+                if time == int.getStart() {
+                    match int {
+                        InterventionType::Kkkkkzone => {
+                            let resula = Vec::new();
+                            let resulb = Vec::new();
+                            for p in self.populationposvel[time-1][2] {
+                                resula.push(p*0.05);
+                            }
+                            for p in self.populationposvel[time-1][3] {
+                                resulb.push(p*0.05);
+                            }
+                            self.populationposvel[time-1][2] = resula;
+                            self.populationposvel[time-1][3] = resulb;
+                        },
+                        InterventionType::Mask => {
+                            self.spreadRan = self.spreadRan * 0.4;
+                        }
+                    }
+                    
+                } else if time == int.getEnd() {
+                    match int {
+                        InterventionType::Kkkkkzone => {
+                            let resula = Vec::new();
+                            let resulb = Vec::new();
+                            for p in self.populationposvel[time-1][2] {
+                                resula.push(p*20.0);
+                            }
+                            for p in self.populationposvel[time-1][3] {
+                                resulb.push(p*20.0);
+                            }
+                            self.populationposvel[time-1][2] = resula;
+                            self.populationposvel[time-1][3] = resulb;
+                        },
+                        InterventionType::Mask => {
+                            self.spreadRan = self.spreadRan / 0.4;
+                        }
+                    }
+                }
+            }
             self.populationposvel[time] = self.wgpuinit.moveCol(self.populationposvel[time-1][0].clone(), self.populationposvel[time-1][1].clone(), self.populationposvel[time-1][2].clone(), self.populationposvel[time-1][3].clone(), [self.spawnLoc.get(0, 0) as f32,self.spawnLoc.get(0, 1)as f32] ).await;
             self.populationinf[time] = self.wgpuinit.checkInf(self.populationposvel[time][0].clone(), self.populationposvel[time][1].clone(), self.populationinf[time-1].clone(), self.infRad*self.infRad).await;
+            for p in 0..self.populationinf.len() {
+                if !self.populationinf[time-1][p] {
+                    if rng.gen() > self.spreadRan {
+                        self.populationinf[time][p] = false;
+                    }
+                }
+            }
         }
         println!("timestep: {:?}", time)
     }
 
     pub fn newFrame(&mut self, time: usize) {
-        self.wgpuinit.newFrame(self.populationposvel[time][0].clone(), self.populationposvel[time][1].clone(), self.populationinf[time].clone());
+        if self.simulated {
+            self.wgpuinit.newFrame(self.populationposvel[time][0].clone(), self.populationposvel[time][1].clone(), self.populationinf[time].clone());
+        }
     }
 
     //pub fn oldtimestep(&mut self, time: usize) {
