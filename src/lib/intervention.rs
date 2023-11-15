@@ -1,4 +1,4 @@
-
+#[derive(PartialEq, Clone, Copy)]
 pub struct Intervention {
     intType: InterventionType,
     startTime: usize,
@@ -19,13 +19,17 @@ impl Intervention {
     pub fn getStart(&mut self) -> usize {
         self.startTime
     }
-    
+
     pub fn getEnd(&mut self) -> usize {
         self.endTime
     }
+
+    pub fn getType(&mut self) -> InterventionType {
+        self.intType
+    }
 }
 
-
+#[derive(PartialEq, Clone, Copy)]
 pub enum InterventionType {
     Kkkkkzone,
     Mask

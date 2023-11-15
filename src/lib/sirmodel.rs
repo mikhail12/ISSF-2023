@@ -3,7 +3,10 @@
 
 use tokio::task::block_in_place;
 
-use super::{matrix::Matrix, person::{Person, Personstate}, wgpuInit::WgpuInit};
+use crate::lib::intervention::InterventionType;
+
+use super::{matrix::Matrix, person::{Person, Personstate}, wgpuInit::WgpuInit, intervention::Intervention};
+use rand::{thread_rng,Rng};
 
 
 
@@ -50,7 +53,7 @@ impl SIRModel {
             res.populationinf[0].push(boolToU32(res.population[0][i].infectCheck()))
         }
 
-        res.popsize = popsize;
+        res.popsize = self.popsize;
         res.spreadMinMax = self.spreadMinMax;
         res.spreadRan = self.spreadRan;
         println!("x: {:?}, y: {:?}",self.spawnLoc.clone().data[0][0],self.spawnLoc.clone().data[0][1]);
@@ -121,10 +124,10 @@ impl SIRModel {
     }
 
     pub fn numInfected(&mut self) -> Vec<usize> {
-        let c = vec![0];
+        let mut c = vec![0];
         for i in 0..self.daysRun {
             for j in 0..self.populationinf[i].len() {
-                if self.populationinf[i][j] {
+                if self.populationinf[i][j] > 0 {
                     c[i] = c[i] + 1;
                 }
             }
@@ -195,16 +198,16 @@ impl SIRModel {
     pub async fn timestep(&mut self, time: usize) {
         let mut rng = rand::thread_rng();
         if time > 0 {
-            for int in self.interventions {
+            for mut int in self.interventions.clone() {
                 if time == int.getStart() {
-                    match int {
+                    match int.getType() {
                         InterventionType::Kkkkkzone => {
-                            let resula = Vec::new();
-                            let resulb = Vec::new();
-                            for p in self.populationposvel[time-1][2] {
+                            let mut resula = Vec::new();
+                            let mut resulb = Vec::new();
+                            for p in self.populationposvel[time-1][2].clone() {
                                 resula.push(p*0.05);
                             }
-                            for p in self.populationposvel[time-1][3] {
+                            for p in self.populationposvel[time-1][3].clone() {
                                 resulb.push(p*0.05);
                             }
                             self.populationposvel[time-1][2] = resula;
@@ -216,14 +219,14 @@ impl SIRModel {
                     }
                     
                 } else if time == int.getEnd() {
-                    match int {
+                    match int.getType() {
                         InterventionType::Kkkkkzone => {
-                            let resula = Vec::new();
-                            let resulb = Vec::new();
-                            for p in self.populationposvel[time-1][2] {
+                            let mut resula = Vec::new();
+                            let mut resulb = Vec::new();
+                            for p in self.populationposvel[time-1][2].clone() {
                                 resula.push(p*20.0);
                             }
-                            for p in self.populationposvel[time-1][3] {
+                            for p in self.populationposvel[time-1][3].clone() {
                                 resulb.push(p*20.0);
                             }
                             self.populationposvel[time-1][2] = resula;
@@ -238,9 +241,9 @@ impl SIRModel {
             self.populationposvel[time] = self.wgpuinit.moveCol(self.populationposvel[time-1][0].clone(), self.populationposvel[time-1][1].clone(), self.populationposvel[time-1][2].clone(), self.populationposvel[time-1][3].clone(), [self.spawnLoc.get(0, 0) as f32,self.spawnLoc.get(0, 1)as f32] ).await;
             self.populationinf[time] = self.wgpuinit.checkInf(self.populationposvel[time][0].clone(), self.populationposvel[time][1].clone(), self.populationinf[time-1].clone(), self.infRad*self.infRad).await;
             for p in 0..self.populationinf.len() {
-                if !self.populationinf[time-1][p] {
-                    if rng.gen() > self.spreadRan {
-                        self.populationinf[time][p] = false;
+                if self.populationinf[time-1][p] == 0 {
+                    if rng.gen::<f64>() > self.spreadRan {
+                        self.populationinf[time][p] = 0;
                     }
                 }
             }
