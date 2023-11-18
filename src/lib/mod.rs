@@ -6,3 +6,4 @@ pub mod sirmodel;
 pub mod wgpuInit;
 pub mod intervention;
 pub mod trainer;
+pub mod bayesian;

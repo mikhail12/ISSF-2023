@@ -50,7 +50,7 @@ impl WgpuInit {
             label: Some("Infected or not array Buffer"),
             contents: u32_vector_to_bytes(&infvec),
             //contents: bytemuck::cast_slice(&posyvec),
-            usage: BufferUsages::STORAGE | BufferUsages::COPY_SRC | BufferUsages::COPY_DST
+            usage: BufferUsages::UNIFORM | BufferUsages::COPY_SRC | BufferUsages::COPY_DST
         });
 
 
@@ -58,14 +58,14 @@ impl WgpuInit {
             label: Some("X Positions array Buffer"),
             contents: f32_vector_to_bytes(&posxvec),
             //contents: bytemuck::cast_slice(&posxvec),
-            usage: BufferUsages::STORAGE | BufferUsages::COPY_SRC | BufferUsages::COPY_DST 
+            usage: BufferUsages::UNIFORM | BufferUsages::COPY_SRC | BufferUsages::COPY_DST 
         });
 
         let yPosBuffer = self.device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: Some("Y Positions array Buffer"),
             contents: f32_vector_to_bytes(&posyvec),
             //contents: bytemuck::cast_slice(&posyvec),
-            usage: BufferUsages::STORAGE | BufferUsages::COPY_SRC | BufferUsages::COPY_DST
+            usage: BufferUsages::UNIFORM | BufferUsages::COPY_SRC | BufferUsages::COPY_DST
         });
 
 
@@ -94,6 +94,7 @@ impl WgpuInit {
                     }),
                     write_mask: wgpu::ColorWrites::ALL
                 })];
+
         let pipelineDescriptor = wgpu::RenderPipelineDescriptor {
             label: Some("Render Pipeline Descriptor"),
             layout: None,
@@ -119,15 +120,15 @@ impl WgpuInit {
 
         let pipeline = self.device.create_render_pipeline(&pipelineDescriptor);
 
-        let bindGroupLayout = pipeline.get_bind_group_layout(0);
+        let bindGroupLayout = pipeline.get_bind_group_layout(1);
 
         let bindGroupDescriptor = wgpu::BindGroupDescriptor {
             label: Some("Bindgroup for work buffer"),
             layout: &bindGroupLayout,
             entries: & [
-                BindGroupEntry {binding: 0, resource: infBuffer.as_entire_binding()},
-                BindGroupEntry {binding: 1, resource: xPosBuffer.as_entire_binding()},
-                BindGroupEntry {binding: 2, resource: yPosBuffer.as_entire_binding()},
+                BindGroupEntry {binding: 1, resource: infBuffer.as_entire_binding()},
+                BindGroupEntry {binding: 2, resource: xPosBuffer.as_entire_binding()},
+                BindGroupEntry {binding: 3, resource: yPosBuffer.as_entire_binding()},
             ]
         };
 

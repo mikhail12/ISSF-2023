@@ -13,7 +13,7 @@ use array_macro::array;
 
 use std::{borrow::Cow, iter, num::{NonZeroU64, NonZeroU32}, array, any::TypeId};
 
-use crate::lib::{network::Network, activations::SIGMOID, sirmodel::SIRModel};
+use crate::lib::{network::Network, activations::SIGMOID, sirmodel::SIRModel, trainer::{Trainer, TrainModel}};
 use lib::{person::Personstate, wgpuInit::{self, WgpuInit}};
 
 
@@ -233,11 +233,20 @@ async fn main() {
 
     let days = 100;
 
-    let mut simulation = SIRModel::new(100, 1.4,7,5,1.0,0.05,1000.0,1000.0,10.0,100.0,days, wgpuinit,Vec::new());
+    let mut simulation = SIRModel::new(10, 1.4,7,5,1.0,0.05,1000.0,1000.0,10.0,100.0,days, wgpuinit,Vec::new());
 
     let mutdat = Arc::new(Mutex::new(simulation));
     let thdat1 = Arc::clone(&mutdat);
     let thdat2 = Arc::clone(&mutdat);
+    let thdat3 = Arc::clone(&mutdat);
+
+    let mut optimal = 0.0;
+
+    let mut trainsim = async {
+        let mut trainer = Trainer::new(thdat3, 10,100, vec![vec![0]],  Vec::new(), TrainModel::Simple, 0.98);
+        optimal = trainer.train().await;
+        println!("{:?}", optimal);
+    };
 
     let mut t: usize = 0;
 
@@ -261,7 +270,7 @@ async fn main() {
                         WindowEvent::CloseRequested => control_flow.exit(),
                         winit::event::WindowEvent::RedrawRequested => {
 
-                            simul.newFrame(t);
+                            //simul.newFrame(t);
                             println!("This ran as well");
                             if t <days {
                                 t = t+1
@@ -279,7 +288,8 @@ async fn main() {
         });
     };
 
-    runsim.await;
+    trainsim.await;
+    //runsim.await;
     eventloopfuture.await;
     
     //futures::future::join(runsim,eventloopfuture);

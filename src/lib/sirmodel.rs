@@ -23,7 +23,8 @@ pub struct SIRModel {
     wgpuinit: WgpuInit,
     simulated: bool,
     spreadRan: f64,
-    interventions: Vec<Intervention>
+    interventions: Vec<Intervention>,
+    velocityMinMax: Matrix
 }
 
 //spreadran is actually the spread rate
@@ -35,33 +36,28 @@ impl SIRModel {
         
     }
 
+    pub fn setDays(&mut self, days: usize) {
+        self.daysRun = days;
+    }
+
     pub fn clearOut(&mut self) {
-        let mut res = SIRModel::emptyTZero(self.popsize, self.daysRun, self.wgpuinit);
+        self.population = vec![Vec::new()];
+        self.populationposvel = vec![[Vec::new(),Vec::new(),Vec::new(),Vec::new()]];
+        self.populationinf = vec![Vec::new()];
         for i in 0..(self.popsize-self.getNumInfected(0)) {
-            res.population[0].push(Person::random(Personstate::Sus,self.spreadMinMax.clone(), self.spawnLoc.clone(), self.velocityMinMax.clone()));
+            self.population[0].push(Person::random(Personstate::Sus,self.spreadMinMax.clone(), self.spawnLoc.clone(), self.velocityMinMax.clone()));
         }
         for i in 0..self.getNumInfected(0) {
-            res.population[0].push(Person::random(Personstate::Inf,self.spreadMinMax.clone(), self.spawnLoc.clone(), self.velocityMinMax.clone()));
+            self.population[0].push(Person::random(Personstate::Inf,self.spreadMinMax.clone(), self.spawnLoc.clone(), self.velocityMinMax.clone()));
     
         }
-
         for i in 0..self.popsize {
-            res.populationposvel[0][0].push(res.population[0][i].getPosVel()[0]);
-            res.populationposvel[0][1].push(res.population[0][i].getPosVel()[1]);
-            res.populationposvel[0][2].push(res.population[0][i].getPosVel()[2]);
-            res.populationposvel[0][3].push(res.population[0][i].getPosVel()[3]);
-            res.populationinf[0].push(boolToU32(res.population[0][i].infectCheck()))
+            self.populationposvel[0][0].push(self.population[0][i].getPosVel()[0]);
+            self.populationposvel[0][1].push(self.population[0][i].getPosVel()[1]);
+            self.populationposvel[0][2].push(self.population[0][i].getPosVel()[2]);
+            self.populationposvel[0][3].push(self.population[0][i].getPosVel()[3]);
+            self.populationinf[0].push(boolToU32(self.population[0][i].infectCheck()))
         }
-
-        res.popsize = self.popsize;
-        res.spreadMinMax = self.spreadMinMax;
-        res.spreadRan = self.spreadRan;
-        println!("x: {:?}, y: {:?}",self.spawnLoc.clone().data[0][0],self.spawnLoc.clone().data[0][1]);
-        res.spawnLoc = self.spawnLoc;
-        res.infRad = self.infRad;
-        res.infectiousPeriod = self.infectiousPeriod;
-        res.interventions = self.interventions;
-        self = &mut res;
     }
 
     pub fn emptyTZero(popsize: usize, days: usize, wgpuinit: WgpuInit)-> SIRModel {
@@ -78,7 +74,8 @@ impl SIRModel {
             wgpuinit: wgpuinit,
             simulated: false,
             spreadRan: 0.0,
-            interventions: Vec::new()
+            interventions: Vec::new(),
+            velocityMinMax: Matrix::zeros(1,2)
         }
     }
 
