@@ -3,11 +3,30 @@ struct VertexOutput {
     @builtin(position) clip_position: vec4<f32>,
 };
 
+//layout(set=0,binding=0) buffer
 
-@group(1) @binding(1) var<storage, read_write> inf: array<u32>;
-@group(1) @binding(2) var<storage, read_write> xpos: array<f32>;
-@group(1) @binding(3) var<storage, read_write> ypos: array<f32>;
+@group(0) @binding(0) var<uniform> inf: array<mat4x4<u32>>;
+@group(0) @binding(1) var<uniform> xpos: array<mat4x4<u32>>;
+@group(0) @binding(2) var<uniform> ypos: array<mat4x4<u32>>;
 
+
+/*
+@layout(set = 0, binding = 0) buffer Inf {
+    
+};
+@layout(set = 0, binding = 1) buffer XPos {
+    
+};
+@layout(set = 0, binding = 2) buffer YPos {
+    
+};
+
+@block struct Uniforms {
+    array<u32> inf;
+    array<u32> xpos;
+    array<u32> ypos;
+}
+*/
 
 @vertex
 fn vs_main(@builtin(vertex_index) in_vertex_index: u32) -> VertexOutput {

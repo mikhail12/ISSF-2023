@@ -14,6 +14,8 @@ pub struct SIRModel {
     population: Vec<Vec<Person>>,
     populationposvel: Vec<[Vec<f32>;4]>,
     populationinf: Vec<Vec<u32>>,
+    populationInfDays: Vec<Vec<u32>>,
+    rnaught: Vec<f64>,
     popsize: usize,
     spreadMinMax: Matrix,
     spawnLoc: Matrix,
@@ -33,23 +35,32 @@ impl SIRModel {
 
     pub fn setSpread(&mut self, spreadRate: f64) {
         self.spreadMinMax = Matrix::from(vec![vec![spreadRate-(self.spreadRan/2.0),spreadRate+(self.spreadRan/2.0)]]);
+        self.spreadRan = spreadRate;
         
     }
 
     pub fn setDays(&mut self, days: usize) {
         self.daysRun = days;
+        println!("DAHS");
     }
 
-    pub fn clearOut(&mut self) {
-        self.population = vec![Vec::new()];
-        self.populationposvel = vec![[Vec::new(),Vec::new(),Vec::new(),Vec::new()]];
-        self.populationinf = vec![Vec::new()];
-        for i in 0..(self.popsize-self.getNumInfected(0)) {
-            self.population[0].push(Person::random(Personstate::Sus,self.spreadMinMax.clone(), self.spawnLoc.clone(), self.velocityMinMax.clone()));
-        }
-        for i in 0..self.getNumInfected(0) {
-            self.population[0].push(Person::random(Personstate::Inf,self.spreadMinMax.clone(), self.spawnLoc.clone(), self.velocityMinMax.clone()));
     
+
+    pub fn clearOut(&mut self, startInfNum: usize) {
+        
+        self.population = vec![Vec::new();self.daysRun];
+        self.populationposvel = vec![[Vec::new(),Vec::new(),Vec::new(),Vec::new()];self.daysRun];
+        self.populationinf = vec![Vec::new();self.daysRun];
+        self.populationInfDays = vec![Vec::new();self.daysRun];
+        self.rnaught = vec![0.0;self.daysRun];
+        println!("{:?}", self.popsize);
+        for i in 0..(self.popsize-startInfNum) {
+            self.population[0].push(Person::random(Personstate::Sus,self.spreadMinMax.clone(), self.spawnLoc.clone(), self.velocityMinMax.clone()));
+            self.populationInfDays[0].push(0);
+        }
+        for i in 0..startInfNum {
+            self.population[0].push(Person::random(Personstate::Inf,self.spreadMinMax.clone(), self.spawnLoc.clone(), self.velocityMinMax.clone()));
+            self.populationInfDays[0].push(1);
         }
         for i in 0..self.popsize {
             self.populationposvel[0][0].push(self.population[0][i].getPosVel()[0]);
@@ -58,6 +69,9 @@ impl SIRModel {
             self.populationposvel[0][3].push(self.population[0][i].getPosVel()[3]);
             self.populationinf[0].push(boolToU32(self.population[0][i].infectCheck()))
         }
+        println!("Days Run: {:?}",self.daysRun);
+        println!("Population Size: {:?}",self.popsize);
+        println!("populationInfDays len: {:?}", self.populationInfDays.len());
     }
 
     pub fn emptyTZero(popsize: usize, days: usize, wgpuinit: WgpuInit)-> SIRModel {
@@ -65,6 +79,8 @@ impl SIRModel {
             population: vec![Vec::new();days],
             populationposvel: vec![[Vec::new(),Vec::new(),Vec::new(),Vec::new()];days],
             populationinf: vec![Vec::new();days],
+            populationInfDays: vec![Vec::new(); days],
+            rnaught: vec![0.0;days],
             popsize: 1,
             spreadMinMax: Matrix::zeros(1, 2),
             spawnLoc: Matrix::zeros(1, 2),
@@ -92,28 +108,39 @@ impl SIRModel {
     
         }
 
+        println!("{:?}", res.population[0].len());
+
         for i in 0..popsize {
             res.populationposvel[0][0].push(res.population[0][i].getPosVel()[0]);
             res.populationposvel[0][1].push(res.population[0][i].getPosVel()[1]);
             res.populationposvel[0][2].push(res.population[0][i].getPosVel()[2]);
             res.populationposvel[0][3].push(res.population[0][i].getPosVel()[3]);
-            res.populationinf[0].push(boolToU32(res.population[0][i].infectCheck()))
+            res.populationinf[0].push(boolToU32(res.population[0][i].infectCheck()));
+            res.populationInfDays[0].push(0);
         }
+
+        res.rnaught = vec![0.0;daysRun];
 
         res.popsize = popsize;
         res.spreadMinMax = spreadMinMax;
         res.spreadRan = spreadRate;
-        println!("x: {:?}, y: {:?}",spawnLoc.clone().data[0][0],spawnLoc.clone().data[0][1]);
+        //println!("x: {:?}, y: {:?}",spawnLoc.clone().data[0][0],spawnLoc.clone().data[0][1]);
         res.spawnLoc = spawnLoc;
         res.infRad = infRad;
         res.infectiousPeriod = infectiousPeriod;
         res.interventions = interventions;
+        res.velocityMinMax = velocityMinMax;
         res
+    }
+
+    pub fn getrnaught(&mut self) -> Vec<f64> {
+        return self.rnaught.clone();
     }
 
     pub async fn runSim(&mut self) {
         println!("This code actually executed");
-        for i in 0..self.daysRun {
+        println!("Days run: {:?}", self.daysRun);
+        for i in 0..self.daysRun  {
             self.timestep(i).await
         }
         println!("This finished");
@@ -122,14 +149,35 @@ impl SIRModel {
 
     pub fn numInfected(&mut self) -> Vec<usize> {
         let mut c = vec![0];
+        println!("{:?}",self.daysRun);
         for i in 0..self.daysRun {
+            c.push(0);
             for j in 0..self.populationinf[i].len() {
                 if self.populationinf[i][j] > 0 {
                     c[i] = c[i] + 1;
                 }
             }
+            //c[i] = c[i] / self.popsize;
         }
         c
+    }
+
+    pub fn propInfected(&mut self) -> Vec<f64> {
+        let mut c = vec![0];
+        let mut res = Vec::new();
+        println!("{:?}",self.daysRun);
+        for i in 0..self.daysRun {
+            c.push(0);
+            for j in 0..self.populationinf[i].len() {
+                if self.populationinf[i][j] == 1 {
+                    c[i] = c[i] + 1;
+                }
+            }
+            //c[i] = c[i];
+            res.push((c[i] as f64)/(self.popsize as f64));
+        }
+        println!("{:?}", c);
+        res
     }
 
     
@@ -194,7 +242,11 @@ impl SIRModel {
 
     pub async fn timestep(&mut self, time: usize) {
         let mut rng = rand::thread_rng();
-        if time > 0 {
+
+        
+
+        if time > 0 && self.infRad > 0.0{
+            self.populationInfDays[time] = self.populationInfDays[time-1].clone();
             for mut int in self.interventions.clone() {
                 if time == int.getStart() {
                     match int.getType() {
@@ -235,12 +287,40 @@ impl SIRModel {
                     }
                 }
             }
-            self.populationposvel[time] = self.wgpuinit.moveCol(self.populationposvel[time-1][0].clone(), self.populationposvel[time-1][1].clone(), self.populationposvel[time-1][2].clone(), self.populationposvel[time-1][3].clone(), [self.spawnLoc.get(0, 0) as f32,self.spawnLoc.get(0, 1)as f32] ).await;
+
+            //println!("popinf legnth: {:?}", self.populationposvel[time-1][0]);
+
+            self.populationposvel[time] =self.wgpuinit.moveCol(self.populationposvel[time-1][0].clone(), self.populationposvel[time-1][1].clone(), self.populationposvel[time-1][2].clone(), self.populationposvel[time-1][3].clone(), [self.spawnLoc.get(0, 0) as f32,self.spawnLoc.get(0, 1)as f32] ).await;
             self.populationinf[time] = self.wgpuinit.checkInf(self.populationposvel[time][0].clone(), self.populationposvel[time][1].clone(), self.populationinf[time-1].clone(), self.infRad*self.infRad).await;
-            for p in 0..self.populationinf.len() {
+            
+
+            let mut count = 0.0;
+            for p in 0..self.populationinf[time].len() {
                 if self.populationinf[time-1][p] == 0 {
-                    if rng.gen::<f64>() > self.spreadRan {
-                        self.populationinf[time][p] = 0;
+                    if self.populationinf[time][p] == 1 {
+                        //println!("asdfbaf");
+                        //println!("{:?}", self.spreadRan);
+                        let random = rng.gen::<f64>();
+                        count += 1.0;
+                        //println!("CHECKS: {:?}", random);
+                        if random > self.spreadRan {
+                            //println!("checkasdf");
+                            self.populationinf[time][p] = 0;
+                        } 
+                    }
+
+                    
+                }
+            }
+            count = count / (self.numInfected()[time] as f64) * (self.spreadRan as f64);
+            self.rnaught[time] = count; 
+
+
+            for p in 0..self.populationinf.len() {
+                if self.populationinf[time][p] == 1 {
+                    self.populationInfDays[time][p] = self.populationInfDays[time][p] + 1;
+                    if self.populationInfDays[time][p] > self.infectiousPeriod as u32 {
+                        self.populationinf[time][p] == 2;
                     }
                 }
             }

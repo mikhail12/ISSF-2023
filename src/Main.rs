@@ -15,7 +15,10 @@ use std::{borrow::Cow, iter, num::{NonZeroU64, NonZeroU32}, array, any::TypeId};
 
 use crate::lib::{network::Network, activations::SIGMOID, sirmodel::SIRModel, trainer::{Trainer, TrainModel}};
 use lib::{person::Personstate, wgpuInit::{self, WgpuInit}};
-
+use std::error::Error;
+use std::fs::File;
+use std::io::{self, BufRead};
+use std::path::Path;
 
 pub mod lib;
 
@@ -233,7 +236,15 @@ async fn main() {
 
     let days = 100;
 
-    let mut simulation = SIRModel::new(10, 1.4,7,5,1.0,0.05,1000.0,1000.0,10.0,100.0,days, wgpuinit,Vec::new());
+    let mut expectedPopSize = 9633740;
+    //let mut expectedPopSize = 4968000;
+    //let mut expectedPopSize = 10350000;
+
+    let mut populationSize = 60000;
+
+    let probability = 0.5311931876496908;
+
+    let mut simulation = SIRModel::new(populationSize, 7.0,14,5,probability,0.05,100000.0,100000.0,10.0,300.0,days, wgpuinit,Vec::new());
 
     let mutdat = Arc::new(Mutex::new(simulation));
     let thdat1 = Arc::clone(&mutdat);
@@ -242,10 +253,19 @@ async fn main() {
 
     let mut optimal = 0.0;
 
+    if let Err(err) = read_csv_file("src/belarus.csv") {
+        eprintln!("Error: {}", err);
+    }
+
+    let mut startingData = vec![read_csv_file("src/belarus.csv").unwrap()];
+    
+
+    //let mut startingData = vec![vec![3,5,10,25,60]];
+
     let mut trainsim = async {
-        let mut trainer = Trainer::new(thdat3, 10,100, vec![vec![0]],  Vec::new(), TrainModel::Simple, 0.98);
-        optimal = trainer.train().await;
-        println!("{:?}", optimal);
+        let mut trainer = Trainer::new(thdat3, 10,10, startingData,  Vec::new(), TrainModel::Bayesian, 0.1, expectedPopSize, populationSize);
+        optimal = trainer.train(expectedPopSize).await;
+        println!("Optimal: {:?}", optimal);
     };
 
     let mut t: usize = 0;
@@ -254,6 +274,8 @@ async fn main() {
         let mut simul = thdat1.lock().unwrap();
         println!("this is running");
         runsimulation(&mut *simul).await;
+        println!("{:?}", simul.numInfected());
+        println!("{:?}", simul.getrnaught());
     };
 
     let mut eventloopfuture = async {
@@ -270,7 +292,7 @@ async fn main() {
                         WindowEvent::CloseRequested => control_flow.exit(),
                         winit::event::WindowEvent::RedrawRequested => {
 
-                            //simul.newFrame(t);
+                            simul.newFrame(t);
                             println!("This ran as well");
                             if t <days {
                                 t = t+1
@@ -288,8 +310,8 @@ async fn main() {
         });
     };
 
-    trainsim.await;
-    //runsim.await;
+    //trainsim.await;
+    runsim.await;
     eventloopfuture.await;
     
     //futures::future::join(runsim,eventloopfuture);
@@ -345,4 +367,23 @@ async fn handle_event(event: Event<()>, control_flow: &mut ControlFlow) {
 async fn  runsimulation(simul: &mut SIRModel) {
     println!("This ever run?");
     simul.runSim().await;
+}
+
+fn read_csv_file(file_path: &str) -> Result<Vec<usize>, Box<dyn Error>> {
+    let file = File::open(file_path)?;
+    let mut numbers = Vec::new();
+    let mut reader = io::BufReader::new(file);
+
+    for line in reader.lines() {
+        let line = line?;
+        let values: Vec<usize> = line
+            .trim()
+            .split(',')
+            .filter_map(|s| s.parse().ok())
+            .collect();
+
+        numbers.extend(values);
+    }
+
+    Ok(numbers)
 }

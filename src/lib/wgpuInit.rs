@@ -120,15 +120,53 @@ impl WgpuInit {
 
         let pipeline = self.device.create_render_pipeline(&pipelineDescriptor);
 
-        let bindGroupLayout = pipeline.get_bind_group_layout(1);
+        let infBufBindGroupLayoutEntry = wgpu::BindGroupLayoutEntry {
+            binding: 0,
+            visibility: wgpu::ShaderStages::VERTEX_FRAGMENT,
+            ty: wgpu::BindingType::Buffer {
+                ty: wgpu::BufferBindingType::Uniform,
+                has_dynamic_offset: false,
+                min_binding_size: None
+            },
+            count: NonZeroU32::new(infvec.len() as u32)
+        };
+        let xPosBufBindGroupLayoutEntry = wgpu::BindGroupLayoutEntry {
+            binding: 1,
+            visibility: wgpu::ShaderStages::VERTEX_FRAGMENT,
+            ty: wgpu::BindingType::Buffer {
+                ty: wgpu::BufferBindingType::Uniform,
+                has_dynamic_offset: false,
+                min_binding_size: None
+            },
+            count: NonZeroU32::new(posxvec.len() as u32)
+        };
+        let yPosBufBindGroupLayoutEntry = wgpu::BindGroupLayoutEntry {
+            binding: 2,
+            visibility: wgpu::ShaderStages::VERTEX_FRAGMENT,
+            ty: wgpu::BindingType::Buffer {
+                ty: wgpu::BufferBindingType::Uniform,
+                has_dynamic_offset: false,
+                min_binding_size: None
+            },
+            count: NonZeroU32::new(posyvec.len() as u32)
+        };
+
+        let bindGroupLayoutDescriptor = wgpu::BindGroupLayoutDescriptor {
+            label: Some("Bind group layout descriptor"),
+            entries: &[infBufBindGroupLayoutEntry, xPosBufBindGroupLayoutEntry, yPosBufBindGroupLayoutEntry]
+        };
+        let bindGroupLayout = self.device.create_bind_group_layout(&bindGroupLayoutDescriptor);
+
+        //let mut bindGroupLayout = pipeline.get_bind_group_layout(1);
+
 
         let bindGroupDescriptor = wgpu::BindGroupDescriptor {
             label: Some("Bindgroup for work buffer"),
             layout: &bindGroupLayout,
             entries: & [
-                BindGroupEntry {binding: 1, resource: infBuffer.as_entire_binding()},
-                BindGroupEntry {binding: 2, resource: xPosBuffer.as_entire_binding()},
-                BindGroupEntry {binding: 3, resource: yPosBuffer.as_entire_binding()},
+                BindGroupEntry {binding: 0, resource: infBuffer.as_entire_binding()},
+                BindGroupEntry {binding: 1, resource: xPosBuffer.as_entire_binding()},
+                BindGroupEntry {binding: 2, resource: yPosBuffer.as_entire_binding()},
             ]
         };
 
@@ -160,6 +198,8 @@ impl WgpuInit {
     }
 
     pub async fn checkInf(&mut self, posx: Vec<f32>, posy: Vec<f32>, inf: Vec<u32>, infRad: f32) -> Vec<u32> {
+        
+        
         let mut posxvec: Vec<f32> = posx;
         let mut posyvec: Vec<f32> = posy;
         let mut infvec: Vec<u32> = inf;
@@ -191,7 +231,6 @@ impl WgpuInit {
             //contents: bytemuck::cast_slice(&posyvec),
             usage: BufferUsages::STORAGE | BufferUsages::COPY_SRC | BufferUsages::COPY_DST
         });
-
 
         let xPosBuffer = self.device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: Some("X Positions array Buffer"),
@@ -287,7 +326,8 @@ impl WgpuInit {
         let mut velxvec: Vec<f32> = velx;
         let mut velyvec: Vec<f32> = vely;
 
-
+        //println!("Bytes are thiss {:?}  wooooo",f32_vector_to_bytes(&posyvec));
+        
         let shader = self.device.create_shader_module(wgpu::ShaderModuleDescriptor {
             label: None,
             source: wgpu::ShaderSource::Wgsl(Cow::Borrowed(include_str!("moveshader.wgsl"))),
@@ -309,7 +349,6 @@ impl WgpuInit {
             usage: BufferUsages::UNIFORM 
         });
 
-        
 
         let yEdgeBuffer = self.device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: Some("Y Edge Buffer"),
@@ -317,6 +356,8 @@ impl WgpuInit {
             //contents: bytemuck::cast_slice(&edges[1]),
             usage: BufferUsages::UNIFORM 
         });
+
+        //println!("{:?} sdfbaisdfbu", f32_vector_to_bytes(&posxvec));
     
         let xPosBuffer = self.device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: Some("X Positions array Buffer"),
